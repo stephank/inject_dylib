@@ -5,6 +5,8 @@ another process. Indy currently supports targetting 32-bit and 64-bit x86
 processes, interoperates with the sandbox, and has been tested on OS X 10.10.
 
 ```C
+#include "indy.h"
+
 const char *str = "Hello world!";
 
 struct indy_error err;
@@ -16,7 +18,7 @@ struct indy_info info = {
     .user_data_size = strlen(str) + 1
 };
 
-if (!indy_inject(&info, &inject_err))
+if (!indy_inject(&info, &err))
     fprintf(stderr, err.descr, err.os_ret);
 
 // And in your dynamic library:
