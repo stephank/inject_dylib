@@ -4,25 +4,27 @@ Inject_dylib (indy) allows you to load a dynamic library and start a thread in
 another process. Indy currently supports targetting 32-bit and 64-bit x86
 processes, interoperates with the sandbox, and has been tested on OS X 10.10.
 
-    const char *str = "Hello world!";
+```C
+const char *str = "Hello world!";
 
-    struct indy_error err;
-    struct indy_info info = {
-        .pid = 1234,
-        .dylib_path = "/path/to/libfoo.dylib",
-        .dylib_entry_symbol = "foo_entry",
-        .user_data = (void *) str,
-        .user_data_size = strlen(str) + 1
-    };
+struct indy_error err;
+struct indy_info info = {
+    .pid = 1234,
+    .dylib_path = "/path/to/libfoo.dylib",
+    .dylib_entry_symbol = "foo_entry",
+    .user_data = (void *) str,
+    .user_data_size = strlen(str) + 1
+};
 
-    if (!indy_inject(&info, &inject_err))
-        fprintf(stderr, err.descr, err.os_ret);
+if (!indy_inject(&info, &inject_err))
+    fprintf(stderr, err.descr, err.os_ret);
 
-    // And in your dynamic library:
-    void foo_entry(struct indy_info *info) {
-        const char *str = info->user_data;
-        printf("%s\n", str);
-    }
+// And in your dynamic library:
+void foo_entry(struct indy_info *info) {
+    const char *str = info->user_data;
+    printf("%s\n", str);
+}
+```
 
 ### Technical details
 
@@ -33,35 +35,37 @@ and the app sandbox.
 Indy copies a small architecture specific loader into the target process, and
 starts a Mach thread. The loader does roughly the following:
 
-    extern struct indy_info info;
+```C
+extern struct indy_info info;
 
-    static void close_port()
-    {
-        mach_port_deallocate(mach_task_self(), info.port);
+static void close_port()
+{
+    mach_port_deallocate(mach_task_self(), info.port);
+}
+
+static void main()
+{
+    sandbox_extension_consume(info.dylib_token);
+
+    info.handle = dlopen(info.dylib_path, RTLD_LOCAL);
+    if (info.handle != NULL) {
+        indy_entry entry = dlsym(info.handle, info.dylib_entry_symbol);
+        if (entry != NULL)
+            entry(&info);
+        dlclose(info.handle);
     }
 
-    static void main()
-    {
-        sandbox_extension_consume(info.dylib_token);
+    close_port();
+}
 
-        info.handle = dlopen(info.dylib_path, RTLD_LOCAL);
-        if (info.handle != NULL) {
-            indy_entry entry = dlsym(info.handle, info.dylib_entry_symbol);
-            if (entry != NULL)
-                entry(&info);
-            dlclose(info.handle);
-        }
-
+void entry()
+{
+    int ret = pthread_create(&info.thread, NULL, main, NULL);
+    if (ret != 0)
         close_port();
-    }
-
-    void entry()
-    {
-        int ret = pthread_create(&info.thread, NULL, main, NULL);
-        if (ret != 0)
-            close_port();
-        thread_terminate(mach_thread_self());
-    }
+    thread_terminate(mach_thread_self());
+}
+```
 
 Indy hides much of the intricate detail from the user. This listing excludes
 architecture specific setup. Before the user entry point runs, a proper pthread
