@@ -36,7 +36,7 @@ certificate in the system keychain and reboot, or sign up for the Apple
 Developer program to get an Apple signed certificate. The latter is probably a
 requirement if you wish to distribute your application.
 
-In addition, add the following key to your application Info.plist:
+In addition, add the following key to your application `Info.plist`:
 
 ```XML
 <key>SecTaskAccess</key>
