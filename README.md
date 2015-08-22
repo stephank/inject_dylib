@@ -28,6 +28,29 @@ void foo_entry(struct indy_info *info) {
 }
 ```
 
+### Security restrictions
+
+For your application to be able to do code injection, it needs to be code
+signed by a certificate in the system keychain. Either create a self-signed
+certificate in the system keychain and reboot, or sign up for the Apple
+Developer program to get an Apple signed certificate. The latter is probably a
+requirement if you wish to distribute your application.
+
+In addition, add the following key to your application Info.plist:
+
+```XML
+<key>SecTaskAccess</key>
+<array>
+    <string>allowed</string>
+</array>
+```
+
+Alternatively, you can use a privileged helper. Either way, it is probably wise
+to restrict this kind of access to a separate helper executable within your
+application bundle.
+
+The injector process currently cannot have App Sandbox enabled.
+
 ### Technical details
 
 Indy is inspired by [mach_inject], but takes a very different approach,
