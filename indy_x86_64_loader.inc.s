@@ -45,7 +45,6 @@ main:
 
   # Consume the sandbox extension.
   movq d_dylib_token(%rip), %rdi            # token
-  int3
   call *_sandbox_extension_consume(%rip)
 
   # Open library.
