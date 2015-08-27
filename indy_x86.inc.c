@@ -107,16 +107,16 @@ bool indy_inject_x(struct indy_private *p, struct indy_error *err)
 
     // Copy user data on 16-byte alignment.
     size_t user_data_size = p->info->user_data_size;
-    while (((uintptr_t) d_user_data) & 4) d_user_data++;
+    while (((uintptr_t) d_user_data) & 15) d_user_data++;
     memcpy(d_user_data, p->info->user_data, user_data_size);
 
     // Locate thread-specific data on 16-byte alignment.
     uint8_t *d_tsd = d_user_data + user_data_size;
-    while (((uintptr_t) d_tsd) & 4) d_tsd++;
+    while (((uintptr_t) d_tsd) & 15) d_tsd++;
 
     // Locate stack on 16-byte alignment.
     uint8_t *d_stack = d_tsd + TSD_SIZE;
-    while (((uintptr_t) d_stack) & 4) d_stack++;
+    while (((uintptr_t) d_stack) & 15) d_stack++;
 
     // Fill the remaining data structure parts.
     mach_vm_address_t base = p->info->region_addr - (mach_vm_address_t) p->local_region;
