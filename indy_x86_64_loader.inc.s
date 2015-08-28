@@ -9,22 +9,30 @@
 # Entry-point.
 entry:
 
-  # Setup thread-specific data.
+  subq $16, %rsp
+
+  # Setup thread-specific data region.
   movq $0x3000003, %rax                     # thread_fast_set_cthread_self64
   movq d_tsd(%rip), %rdi                    # self
   syscall
 
+  # Fake the main thread for the purpose of pthreads.
+  call *_pthread_main_thread_np(%rip)
+  movq %rax, %gs:0                          # __TSD_THREAD_SELF
+
   # Create a proper pthread.
-  leaq d_thread(%rip), %rdi                 # thread
+  leaq 0(%rsp), %rdi                        # thread
   movq $0, %rsi                             # attr
   leaq main(%rip), %rdx                     # start_routine
   movq $0, %rcx                             # arg
   call *_pthread_create(%rip)
   cmpl $0, %eax
-  je entry_end
+  jne entry_end
 
-  # Failed, so close the mach port.
-  call close_port
+  # Wait for the pthread to finish.
+  movq 0(%rsp), %rdi                        # thread
+  movq $0, %rsi                             # value_ptr
+  call *_pthread_join(%rip)
 
 entry_end:
 
@@ -42,6 +50,7 @@ main:
 
   pushq %rbp
   movq %rsp, %rbp
+  subq $16, %rsp
 
   # Consume the sandbox extension.
   movq d_dylib_token(%rip), %rdi            # token
@@ -53,7 +62,7 @@ main:
   call *_dlopen(%rip)
   cmpq $0, %rax
   je main_end
-  movq %rax, d_dylib_handle(%rip)
+  movq %rax, 0(%rsp)
 
   # Find entry-point.
   movq %rax, %rdi                           # handle
@@ -63,35 +72,20 @@ main:
   je main_unload
 
   # Call entry-point.
-  leaq info(%rip), %rdi                     # info
+  movq d_user_data(%rip), %rdi              # user_data
   call *%rax
+  movl %eax, d_exit_status(%rip)
 
 main_unload:
 
   # Close library.
-  movq d_dylib_handle(%rip), %rdi           # handle
+  movq 0(%rsp), %rdi                        # handle
   call *_dlclose(%rip)
 
 main_end:
 
-  # Clean-up the mach port.
-  call close_port
-
-  popq %rbp
-  ret
-
-
-# Helper used to close the mach port.
-close_port:
-
-  pushq %rbp
-  movq %rsp, %rbp
-
-  call *_mach_task_self(%rip)
-  movl %eax, %edi                           # task
-  movl d_port(%rip), %esi                   # name
-  call *_mach_port_deallocate(%rip)
-
+  movq $0, %rax
+  addq $16, %rsp
   popq %rbp
   ret
 
@@ -109,30 +103,23 @@ d_dylib_entry_symbol: .quad 0
 d_user_data: .quad 0
 d_user_data_size: .quad 0
 
+# struct indy_target_info
 d_dylib_token: .quad 0
 
-d_region_addr: .quad 0
-d_region_size: .quad 0
-
-d_port: .long 0
-.long 0
-
-d_thread: .quad 0
-
-d_dylib_handle: .quad 0
-
-# struct indy_target_info
 d_tsd: .quad 0
+
+d_exit_status: .long 0
+.long 0
 
 _dlopen: .quad 0
 _dlsym: .quad 0
 _dlclose: .quad 0
 
-_mach_task_self: .quad 0
-_mach_port_deallocate: .quad 0
 _mach_thread_self: .quad 0
 _thread_terminate: .quad 0
 
+_pthread_main_thread_np: .quad 0
 _pthread_create: .quad 0
+_pthread_join: .quad 0
 
 _sandbox_extension_consume: .quad 0

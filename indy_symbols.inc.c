@@ -26,7 +26,7 @@ struct indy_dyld_all_image_infos_x {
 static void indy_symbols_in_image_x(mach_port_name_t task_port, struct indy_link *match,
                                     mach_vm_address_t addr, struct indy_mach_header_x *mh);
 
-bool indy_symbols_x(mach_port_name_t task_port, struct indy_link *match, struct indy_error *err)
+bool indy_symbols_x(struct indy_private *p, struct indy_link *match)
 {
     kern_return_t kret;
 
@@ -44,12 +44,12 @@ bool indy_symbols_x(mach_port_name_t task_port, struct indy_link *match, struct 
         natural_t region_depth = 0;
         struct indy_vm_region_submap_info_x region_info;
         mach_msg_type_number_t region_info_count = INDY_VM_REGION_SUBMAP_INFO_COUNT_X;
-        kret = mach_vm_region_recurse(task_port, &region_addr, &region_size, &region_depth,
+        kret = mach_vm_region_recurse(p->task, &region_addr, &region_size, &region_depth,
                                       (vm_region_recurse_info_t) &region_info, &region_info_count);
         if (kret == KERN_INVALID_ADDRESS)
-            return indy_set_error(err, indy_couldnt_locate_dynamic_loader, 0);
+            return indy_set_error(p->res, indy_couldnt_locate_dynamic_loader, 0);
         else if (kret != KERN_SUCCESS)
-            return indy_set_error(err, indy_couldnt_iterate_target_memory, kret);
+            return indy_set_error(p->res, indy_couldnt_iterate_target_memory, kret);
 
         // Filter on a minimum Mach-O size, and read/exe flags.
         if (region_size >= MIN_MACH_O_SIZE &&
@@ -57,7 +57,7 @@ bool indy_symbols_x(mach_port_name_t task_port, struct indy_link *match, struct 
             (region_info.protection & VM_PROT_EXECUTE))
         {
             // Read the Mach-O header.
-            kret = mach_vm_read_overwrite(task_port, region_addr, sizeof(mh),
+            kret = mach_vm_read_overwrite(p->task, region_addr, sizeof(mh),
                                           (mach_vm_address_t) &mh, &mh_size);
 
             // Check for a Mach-O with the right filetype.
@@ -72,7 +72,7 @@ bool indy_symbols_x(mach_port_name_t task_port, struct indy_link *match, struct 
 
     // Quick bounds check of commands.
     if (sizeof(mh) + mh.sizeofcmds > region_size)
-        return indy_set_error(err, indy_couldnt_locate_dynamic_loader, 0);
+        return indy_set_error(p->res, indy_couldnt_locate_dynamic_loader, 0);
 
     // dyld exports a debugger interface documented in <mach-o/dyld_images.h>.
     // Normally, a debugger would call _dyld_all_image_infos, but we don't want
@@ -89,34 +89,34 @@ bool indy_symbols_x(mach_port_name_t task_port, struct indy_link *match, struct 
         .num_images = 1,
         .images = dyld_images
     };
-    indy_symbols_in_image_x(task_port, &dyld_match, region_addr, &mh);
+    indy_symbols_in_image_x(p->task, &dyld_match, region_addr, &mh);
     if (all_infos_ptr_addr == 0)
-        return indy_set_error(err, indy_couldnt_locate_image_info, 0);
+        return indy_set_error(p->res, indy_couldnt_locate_image_info, 0);
 
     // Read the dyld::gProcessInfo pointer.
     indy_uintptr_x all_infos_ptr;
     mach_vm_size_t all_infos_ptr_size;
-    kret = mach_vm_read_overwrite(task_port, all_infos_ptr_addr, sizeof(all_infos_ptr),
+    kret = mach_vm_read_overwrite(p->task, all_infos_ptr_addr, sizeof(all_infos_ptr),
                                   (mach_vm_address_t) &all_infos_ptr, &all_infos_ptr_size);
     if (kret != KERN_SUCCESS || all_infos_ptr_size != sizeof(all_infos_ptr))
-        return indy_set_error(err, indy_couldnt_read_image_info, kret);
+        return indy_set_error(p->res, indy_couldnt_read_image_info, kret);
 
     // Read the image infos struct.
     struct indy_dyld_all_image_infos_x all_infos;
     mach_vm_size_t all_infos_size;
-    kret = mach_vm_read_overwrite(task_port, all_infos_ptr, sizeof(all_infos),
+    kret = mach_vm_read_overwrite(p->task, all_infos_ptr, sizeof(all_infos),
                                   (mach_vm_address_t) &all_infos, &all_infos_size);
     if (kret != KERN_SUCCESS || all_infos_size != sizeof(all_infos))
-        return indy_set_error(err, indy_couldnt_read_image_info, kret);
+        return indy_set_error(p->res, indy_couldnt_read_image_info, kret);
 
     // Read the image infos array.
     uint32_t infos_count = all_infos.infoArrayCount;
     struct indy_dyld_image_info_x infos[infos_count];
     mach_vm_size_t infos_size;
-    kret = mach_vm_read_overwrite(task_port, all_infos.infoArray, sizeof(infos),
+    kret = mach_vm_read_overwrite(p->task, all_infos.infoArray, sizeof(infos),
                                   (mach_vm_address_t) &infos, &infos_size);
     if (kret != KERN_SUCCESS || infos_size != sizeof(infos))
-        return indy_set_error(err, indy_couldnt_read_image_info, kret);
+        return indy_set_error(p->res, indy_couldnt_read_image_info, kret);
 
     // Walk all images.
     for (uint32_t i = 0; i < infos_count; i++)
@@ -124,21 +124,21 @@ bool indy_symbols_x(mach_port_name_t task_port, struct indy_link *match, struct 
         mach_vm_address_t base = infos[i].imageLoadAddress;
 
         // Read the Mach-O header.
-        kret = mach_vm_read_overwrite(task_port, base, sizeof(mh),
+        kret = mach_vm_read_overwrite(p->task, base, sizeof(mh),
                                       (mach_vm_address_t) &mh, &mh_size);
 
         // Check for a Mach-O with the right filetype.
         if (kret == KERN_SUCCESS && mh_size == sizeof(mh) &&
                 mh.magic == INDY_MH_MAGIC_X && mh.filetype == MH_DYLIB)
             // Match symbols in this image.
-            indy_symbols_in_image_x(task_port, match, base, &mh);
+            indy_symbols_in_image_x(p->task, match, base, &mh);
     }
 
     // Check that we found everything.
     for (size_t i = 0; i < match->num_images; i++)
         for (size_t j = 0; j < match->images[i].num_symbols; j++)
             if (*(indy_uintptr_x *) match->images[i].symbols[j].out == 0)
-                return indy_set_error(err, indy_couldnt_locate_symbols, 0);
+                return indy_set_error(p->res, indy_couldnt_locate_symbols, 0);
 
     return true;
 }

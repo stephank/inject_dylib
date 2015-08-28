@@ -15,51 +15,68 @@ typedef uint32_t indy_uintptr_32;
 typedef uint64_t indy_uintptr_64;
 
 // Structures containing matchers for indy_symbols_x.
-struct indy_link_symbol {
+struct indy_link_symbol
+{
     const char *name;
     void *out;
 };
-struct indy_link_image {
+
+struct indy_link_image
+{
     const char *name;   // Matches on LC_ID_DYLIB
     size_t num_symbols;
     struct indy_link_symbol *symbols;
 };
-struct indy_link {
+
+struct indy_link
+{
     size_t num_images;
     struct indy_link_image *images;
 };
 
-// Symbol locators for 32-bit and 64-bit.
-bool indy_symbols_32(mach_port_name_t task_port, struct indy_link *match, struct indy_error *err);
-bool indy_symbols_64(mach_port_name_t task_port, struct indy_link *match, struct indy_error *err);
-
 // Private structure filled by indy_inject before
 // going into target architecture specific code.
-struct indy_private {
-    struct indy_info *info;
+struct indy_private
+{
+    const struct indy_info *info;
+    struct indy_result *res;
+
+    char *dylib_token;
+
+    mach_port_t task;
+
+    mach_vm_address_t region_addr;
+    mach_vm_size_t region_size;
     void *local_region;
-    mach_port_t target_port;
+
+    thread_act_t target_thread;
+
+    mach_vm_address_t exit_status_addr;
 };
 
-// Target architecture specific code.
-bool indy_inject_i386(struct indy_private *p, struct indy_error *err);
-bool indy_inject_x86_64(struct indy_private *p, struct indy_error *err);
+// 32-bit and 64-bit Mach-O symbol locators.
+bool indy_symbols_32(struct indy_private *p, struct indy_link *match);
+bool indy_symbols_64(struct indy_private *p, struct indy_link *match);
+
+// Setup the info structure in the target and thread state.
+bool indy_setup_i386(struct indy_private *p);
+bool indy_setup_x86_64(struct indy_private *p);
 
 // Inline error helpers.
-static inline bool indy_set_error(struct indy_error *err, const char *descr, int64_t ret)
+static inline bool indy_set_error(struct indy_result *res, const char *error, int64_t os_value)
 {
-    if (err != NULL) {
-        err->descr = descr;
-        err->os_ret = ret;
+    if (res != NULL) {
+        res->error = error;
+        res->os_value = os_value;
     }
     return false;
 }
 
-static inline bool indy_set_error_ifneq(struct indy_error *err, const char *descr, int64_t ret, int64_t expected)
+static inline bool indy_set_error_ifneq(struct indy_result *res, const char *error, int64_t os_value, int64_t expected)
 {
-    bool ok = (ret == expected);
+    bool ok = (os_value == expected);
     if (!ok)
-        indy_set_error(err, descr, ret);
+        indy_set_error(res, error, os_value);
     return ok;
 }
 

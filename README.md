@@ -1,30 +1,38 @@
 ## inject_dylib
 
-Inject_dylib (indy) allows you to load a dynamic library and start a thread in
+Inject_dylib (indy) allows you to load a dynamic library and call a function in
 another process. Indy currently supports targetting 32-bit and 64-bit x86
 processes, interoperates with the sandbox, and has been tested on OS X 10.10.
 
 ```C
 #include "indy.h"
 
-const char *str = "Hello world!";
+// In your injector process:
+int main(int argc, char **argv)
+{
+    const char *str = "Hello world!";
 
-struct indy_error err;
-struct indy_info info = {
-    .pid = 1234,
-    .dylib_path = "/path/to/libfoo.dylib",
-    .dylib_entry_symbol = "foo_entry",
-    .user_data = (void *) str,
-    .user_data_size = strlen(str) + 1
-};
+    struct indy_result res;
+    indy_inject(&(struct indy_info) {
+        .pid = 1234,
+        .dylib_path = "/path/to/libfoo.dylib",
+        .dylib_entry_symbol = "foo_entry",
+        .user_data = (const void *) str,
+        .user_data_size = strlen(str) + 1
+    }, &res);
+    if (res.error != NULL) {
+        fprintf(stderr, res.error, res.os_value);
+        return EXIT_FAILURE;
+    }
 
-if (!indy_inject(&info, &err))
-    fprintf(stderr, err.descr, err.os_ret);
+    return res.exit_status;
+}
 
-// And in your dynamic library:
-void foo_entry(struct indy_info *info) {
-    const char *str = info->user_data;
-    printf("%s\n", str);
+// And in your injected dynamic library:
+uint32_t foo_entry(void *user_data)
+{
+    printf("%s\n", (char *) user_data);
+    return EXIT_SUCCESS;
 }
 ```
 
@@ -58,48 +66,33 @@ abstracts away more details, and adds support for different target achitectures
 and the app sandbox.
 
 Indy copies a small architecture specific loader into the target process, and
-starts a Mach thread. The loader does roughly the following:
+starts a pthread. The loader does roughly the following:
 
 ```C
 extern struct indy_info info;
+extern char *dylib_token;
+extern uint32_t exit_status;
 
-static void close_port()
+void loader()
 {
-    mach_port_deallocate(mach_task_self(), info.port);
-}
-
-static void main()
-{
-    sandbox_extension_consume(info.dylib_token);
-
-    info.handle = dlopen(info.dylib_path, RTLD_LOCAL);
-    if (info.handle != NULL) {
-        indy_entry entry = dlsym(info.handle, info.dylib_entry_symbol);
+    sandbox_extension_consume(dylib_token);
+    void *handle = dlopen(info.dylib_path, RTLD_LOCAL);
+    if (handle != NULL) {
+        indy_entry entry = dlsym(handle, info.dylib_entry_symbol);
         if (entry != NULL)
-            entry(&info);
-        dlclose(info.handle);
+            exit_status = entry(info.user_data);
+        dlclose(handle);
     }
-
-    close_port();
-}
-
-void entry()
-{
-    int ret = pthread_create(&info.thread, NULL, main, NULL);
-    if (ret != 0)
-        close_port();
-    thread_terminate(mach_thread_self());
 }
 ```
 
 Indy hides much of the intricate detail from the user. This listing excludes
-architecture specific setup. Before the user entry point runs, a proper pthread
-is created. By using regular dynamic loader calls, the library is free to pull
+architecture specific setup. Before the above code runs, a proper pthread is
+created. By using regular dynamic loader calls, the library is free to pull
 in other library dependencies.
 
 The loader code, info structure and runtime data are all allocated in a single
-block, which can later be deallocated if the injected code decides to never
-return to the loader.
+block. This block is automatically deallocated when the code finishes.
 
 To find the various system functions in the target process address space, indy
 looks for the dynamic loader first, and uses its debugger interface to iterate
@@ -108,16 +101,23 @@ table for the loader to reference. The functions used in the loader are all
 libSystem functions, which are currently guaranteed to be linked into every
 process on OS X.
 
-A Mach port is setup, with a receive right on the injector and send right in
-the target process, allowing the two to communicate. This is also crucial to
-determine actual success on the injector.
-
  [mach_inject]: https://github.com/rentzsch/mach_inject/
 
 ### Release notes
 
+##### v0.2.0 - 2015-07-28
+
+Rework of API:
+
+ - Most significantly, `indy_inject` is now a blocking call that
+   doesn't exit until the injected code does. This simplifies cleanup a lot. 
+ - An exit status is returned back to the injector.
+ - The Mach communication port was removed.
+ - The entry point now directly takes user data.
+
 ##### v0.1.0 - 2015-07-22
-Initial release
+
+Initial release.
 
 ### License
 

@@ -9,7 +9,7 @@
 #define indy_thread_state_x_set_sp(s, v) { (s).__rsp = (__uint64_t) (v); }
 #define INDY_TARGET_THREAD_X x86_THREAD_STATE64
 #define INDY_TARGET_THREAD_X_COUNT x86_THREAD_STATE64_COUNT
-#define indy_inject_x indy_inject_x86_64
+#define indy_setup_x indy_setup_x86_64
 
 #include "indy_x86_64_loader.inc.c"
 #include "indy_x86.inc.c"
