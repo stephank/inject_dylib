@@ -114,6 +114,11 @@ determine actual success on the injector.
 
  [mach_inject]: https://github.com/rentzsch/mach_inject/
 
+### Release notes
+
+##### v0.1.0 - 2015-07-22
+Initial release
+
 ### License
 
 Copyright (c) 2015 Stéphan Kochen
