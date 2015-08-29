@@ -139,7 +139,7 @@ void indy_inject(const struct indy_info *info, struct indy_result *res)
         ok = indy_set_error_ifneq(res, indy_couldnt_read_thread_end_notification, mret, MACH_MSG_SUCCESS);
         if (ok) {
             if (msg.not_header.msgh_id != MACH_NOTIFY_DEAD_NAME)
-                ok = indy_set_error(res, indy_couldnt_read_thread_end_notification, KERN_SUCCESS);
+                ok = indy_set_error(res, indy_couldnt_read_thread_end_notification, MACH_MSG_SUCCESS);
             mach_msg_destroy(&msg.not_header);
         }
     }
