@@ -36,7 +36,7 @@ entry_hop:
   movl %ebx, 12(%esp)                       # arg
   call *_pthread_create(%ebx)
   cmpl $0, %eax
-  je entry_end
+  jne entry_end
 
   # Wait for the pthread to finish.
   movl 16(%esp), %edx                       # thread
@@ -88,7 +88,7 @@ main:
   je main_unload
 
   # Call entry-point.
-  leal info(%ebx), %edx                     # info
+  movl d_user_data(%ebx), %edx              # user_data
   movl %edx, 0(%esp)
   call *%eax
   movl %eax, d_exit_status(%ebx)
