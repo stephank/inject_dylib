@@ -65,8 +65,8 @@ Indy is inspired by [mach_inject], but takes a very different approach,
 abstracts away more details, and adds support for different target achitectures
 and the app sandbox.
 
-Indy copies a small architecture specific loader into the target process, and
-starts a pthread. The loader does roughly the following:
+Indy copies a small architecture specific loader into the target process, which
+does roughly the following:
 
 ```C
 extern struct indy_info info;
@@ -104,6 +104,14 @@ process on OS X.
  [mach_inject]: https://github.com/rentzsch/mach_inject/
 
 ### Release notes
+
+##### v0.2.2 - 2015-07-30
+
+Expanded sandbox private interface header.
+
+##### v0.2.1 - 2015-07-28
+
+Fixes to i386 support.
 
 ##### v0.2.0 - 2015-07-28
 
