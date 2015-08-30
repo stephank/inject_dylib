@@ -10,13 +10,25 @@
 // engineering, but semantics are still vague for the most part.
 
 // Extension name constants.
+extern const char *APP_SANDBOX_MACH;
 extern const char *APP_SANDBOX_READ;
 extern const char *APP_SANDBOX_READ_WRITE;
 
-// Issue a file extension for the given path. The `ext` parameter should be one
-// of the above constants. The `flags` parameter is unknown and should be 0.
+// The below functions wrap this internal function. Probably shouldn't call it
+// directly until we know exact semantics.
+// extern char *sandbox_extension_issue(const char *ext, int type, int flags, const char *subject);
+
+// Issue an extension for the given file path.
+// The `ext` parameter should be APP_SANDBOX_READ or APP_SANDBOX_READ_WRITE.
+// The `reserved` and `flags` parameters should be 0.
 // Returns an allocated token string or NULL on failure.
-extern char *sandbox_extension_issue_file(const char *ext, const char *path, int flags);
+extern char *sandbox_extension_issue_file(const char *ext, const char *path, int reserved, int flags);
+
+// Issue an extension for the given mach service name.
+// The `ext` parameter should be APP_SANDBOX_MACH.
+// The `reserved` and `flags` parameters should be 0.
+// Returns an allocated token string or NULL on failure.
+extern char *sandbox_extension_issue_mach(const char *ext, const char *name, int reserved, int flags);
 
 // Consume an extension token. Returns -1 on failure.
 extern int sandbox_extension_consume(const char *token);

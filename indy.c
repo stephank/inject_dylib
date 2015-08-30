@@ -33,7 +33,7 @@ void indy_inject(const struct indy_info *info, struct indy_result *res)
 
     // Get a sandbox extension token.
     if (ok) {
-        p.dylib_token = sandbox_extension_issue_file(APP_SANDBOX_READ, info->dylib_path, 0);
+        p.dylib_token = sandbox_extension_issue_file(APP_SANDBOX_READ, info->dylib_path, 0, 0);
         ok = (p.dylib_token != NULL);
         if (!ok)
             indy_set_error(res, indy_couldnt_issue_sandbox_extension, 0);
